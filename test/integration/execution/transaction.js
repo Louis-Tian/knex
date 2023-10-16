@@ -810,5 +810,37 @@ module.exports = function (knex) {
         // closed it. (Ex: this was the case for OracleDB before fixing #3721)
       });
     });
+
+    context(
+      '#3583 #5710 should throw error when violate deferred constraint.',
+      async function () {
+        let trx;
+        before(async () => {
+          trx = await knex.transaction();
+          await trx.schema.createTable('user', (table) => {
+            table.text('address').primary();
+          });
+
+          await trx.schema.createTable('order', (table) => {
+            table
+              .text('address')
+              .references('address')
+              .inTable('public.user')
+              .deferrable('deferred');
+          });
+
+          await trx.table('order').insert({ address: 'xyz' });
+        });
+
+        after(async () => {
+          await trx.rollback();
+        });
+
+        it('should throw at commit', function (done) {
+          const x = trx.commit();
+          console.log(x).catch(done);
+        });
+      }
+    );
   });
 };
